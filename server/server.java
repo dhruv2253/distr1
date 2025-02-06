@@ -32,9 +32,11 @@ public class server {
 
 class ClientHandler extends Thread {
     private Socket clientSocket;
+    private File currentDir;
 
     public ClientHandler(Socket socket) {
         this.clientSocket = socket;
+        this.currentDir = new File(System.getProperty("user.dir")); // Default to server's root dir
     }
 
     @Override
@@ -86,7 +88,7 @@ class ClientHandler extends Thread {
     }
 
     private void sendFile(String fileName, PrintWriter out) throws IOException {
-        File file = new File(fileName);
+        File file = new File(currentDir, fileName); // Use the client's current directory
         if (file.exists() && !file.isDirectory()) {
             BufferedInputStream fin = new BufferedInputStream(new FileInputStream(file));
             byte[] buffer = new byte[4096];
@@ -107,7 +109,7 @@ class ClientHandler extends Thread {
     }
 
     private void receiveFile(String fileName, BufferedReader in) throws IOException {
-        FileOutputStream fout = new FileOutputStream(fileName);
+        FileOutputStream fout = new FileOutputStream(new File(currentDir, fileName));
         char[] buffer = new char[4096];
         StringBuilder fileContent = new StringBuilder();
         int charsRead;
@@ -121,14 +123,13 @@ class ClientHandler extends Thread {
                 break;
             }
         }
-    
+
         fout.close();
         System.out.println("File received: " + fileName);
     }
-    
 
     private void deleteFile(String fileName, PrintWriter out) {
-        File file = new File(fileName);
+        File file = new File(currentDir, fileName); // Use the client's current directory
         if (file.delete()) {
             out.println("File deleted: " + fileName);
         } else {
@@ -137,67 +138,55 @@ class ClientHandler extends Thread {
     }
 
     private void listFiles(PrintWriter out) {
-        File currentDir = new File(".");
-        File[] files = currentDir.listFiles();
-        
+        File[] files = currentDir.listFiles(); // List files in client's current directory
         if (files != null && files.length > 0) {
             StringBuilder fileList = new StringBuilder();
             for (File file : files) {
-                fileList.append(file.getName()).append(" ");  // Add file name to the list with space delimiter
+                fileList.append(file.getName()).append(" ");
             }
-            out.println(fileList.toString().trim());  // Send all files at once
+            out.println(fileList.toString().trim());
         } else {
             out.println("No files found.");
         }
     }
 
     private void changeDirectory(String dir, PrintWriter out) {
-        // Print the current working directory for debugging
-        System.out.println("Current working directory: " + System.getProperty("user.dir"));
-    
+        System.out.println("Current directory: " + currentDir.getAbsolutePath());
+
         File newDir;
-    
-        // Check for "cd .." to move up one directory
         if (dir.equals("..")) {
-            // Get the absolute path and go up one directory
-            newDir = new File(System.getProperty("user.dir")).getParentFile();
-            
-            // Check if the parent exists and is a valid directory
+            newDir = currentDir.getParentFile(); // Go up one directory
             if (newDir != null && newDir.exists()) {
-                System.setProperty("user.dir", newDir.getAbsolutePath()); // Change the working directory
-                out.println("Changed directory to " + newDir.getAbsolutePath());
+                currentDir = newDir;
+                out.println("Changed directory to " + currentDir.getAbsolutePath());
             } else {
                 out.println("Already at the root directory.");
             }
         } else {
-            // Handle other cases (absolute or relative path)
-            newDir = new File(System.getProperty("user.dir"), dir); // Resolve relative paths
-            
-            // Ensure that the directory exists and is valid
+            newDir = new File(currentDir, dir); // Resolve relative path
             if (newDir.exists() && newDir.isDirectory()) {
-                System.setProperty("user.dir", newDir.getAbsolutePath()); // Change the working directory
-                out.println("Changed directory to " + newDir.getAbsolutePath());
+                currentDir = newDir;
+                out.println("Changed directory to " + currentDir.getAbsolutePath());
             } else {
                 out.println("Directory not found: " + dir);
             }
         }
-    
-        // Print the updated working directory for debugging
-        System.out.println("Updated working directory: " + System.getProperty("user.dir"));
+        out.println();
+
+        System.out.println("Updated directory: " + currentDir.getAbsolutePath());
     }
-    
-    
 
     private void makeDirectory(String dir, PrintWriter out) {
-        File newDir = new File(dir);
+        File newDir = new File(currentDir, dir);
         if (newDir.mkdir()) {
             out.println("Directory created: " + dir);
         } else {
             out.println("Failed to create directory: " + dir);
         }
+        out.println();
     }
 
     private void printWorkingDirectory(PrintWriter out) {
-        out.println("Current directory: " + System.getProperty("user.dir"));
+        out.println("Current directory: " + currentDir.getAbsolutePath());
     }
 }
