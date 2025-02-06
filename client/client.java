@@ -33,11 +33,9 @@ public class client {
                 // Handle file commands (get, put)
                 if (command.startsWith("get ")) {
                     String fileName = command.substring(4);
-                    out.println(command);
                     receiveFile(fileName, socket);
                 } else if (command.startsWith("put ")) {
                     String fileName = command.substring(4);
-                    out.println(command);
                     sendFile(fileName, socket);
                 } else if (command.equals("quit")) {
                     break;
