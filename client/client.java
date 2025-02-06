@@ -101,6 +101,7 @@ private static void sendFile(String fileName, Socket socket) throws IOException 
     while ((bytesRead = fin.read(buffer)) != -1) {
         bout.write(buffer, 0, bytesRead);
     }
+    bout.write("END_OF_FILE".getBytes());  
 
     bout.flush();  // Ensure the data is sent
     fin.close();

@@ -108,14 +108,20 @@ class ClientHandler extends Thread {
 
     private void receiveFile(String fileName, BufferedReader in) throws IOException {
         FileOutputStream fout = new FileOutputStream(fileName);
-        char[] buffer = new char[4096];  // This buffer should be byte-based for binary data
-        String response;
+        char[] buffer = new char[4096];
+        StringBuilder fileContent = new StringBuilder();
+        int charsRead;
     
-        while (in.ready()) {
-            response = in.readLine();
-            fout.write(response.getBytes(), 0, response.length());
-            fout.write('\n');
+        while ((charsRead = in.read(buffer)) != -1) {
+            fileContent.append(buffer, 0, charsRead);
+    
+            int markerIndex = fileContent.indexOf("END_OF_FILE");
+            if (markerIndex != -1) {
+                fout.write(fileContent.substring(0, markerIndex).getBytes());
+                break;
+            }
         }
+    
         fout.close();
         System.out.println("File received: " + fileName);
     }
