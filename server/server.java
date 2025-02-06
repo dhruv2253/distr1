@@ -92,6 +92,8 @@ class ClientHandler extends Thread {
 
             while ((bytesRead = fin.read(buffer)) != -1) {
                 out.write(new String(buffer, 0, bytesRead));
+                // test print
+                System.out.println("in loop 2");
             }
 
             out.flush();
