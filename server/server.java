@@ -54,9 +54,11 @@ class ClientHandler extends Thread {
                 if (command.startsWith("get ")) {
                     String fileName = command.substring(4);
                     sendFile(fileName, out);
+                    out.println();
                 } else if (command.startsWith("put ")) {
                     String fileName = command.substring(4);
                     receiveFile(fileName, in);
+                    out.println();
                 } else if (command.startsWith("delete ")) {
                     String fileName = command.substring(7);
                     deleteFile(fileName, out);
@@ -92,10 +94,10 @@ class ClientHandler extends Thread {
 
             while ((bytesRead = fin.read(buffer)) != -1) {
                 out.write(new String(buffer, 0, bytesRead));
-                // test print
-                System.out.println("in loop 2");
             }
-
+            out.flush();
+            out.write("END_OF_FILE");
+            out.println();
             out.flush();
             fin.close();
             System.out.println("File sent: " + fileName);
@@ -105,14 +107,15 @@ class ClientHandler extends Thread {
     }
 
     private void receiveFile(String fileName, BufferedReader in) throws IOException {
-        BufferedOutputStream fout = new BufferedOutputStream(new FileOutputStream(fileName));
+        FileOutputStream fout = new FileOutputStream(fileName);
         char[] buffer = new char[4096];  // This buffer should be byte-based for binary data
-        int bytesRead;
+        String response;
     
-        while ((bytesRead = in.read(buffer)) != -1) {
-            fout.write(new String(buffer, 0, bytesRead).getBytes());  // Write data as bytes
+        while (in.ready()) {
+            response = in.readLine();
+            fout.write(response.getBytes(), 0, response.length());
+            fout.write('\n');
         }
-    
         fout.close();
         System.out.println("File received: " + fileName);
     }

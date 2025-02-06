@@ -33,11 +33,9 @@ public class client {
                 // Handle file commands (get, put)
                 if (command.startsWith("get ")) {
                     String fileName = command.substring(4);
-                    out.println(command);
                     receiveFile(fileName, socket);
                 } else if (command.startsWith("put ")) {
                     String fileName = command.substring(4);
-                    out.println(command);
                     sendFile(fileName, socket);
                 } else if (command.equals("quit")) {
                     break;
@@ -66,17 +64,24 @@ public class client {
         FileOutputStream fout = new FileOutputStream(fileName);
         byte[] buffer = new byte[4096];
         int bytesRead;
-        
-        while ((bytesRead = bin.read(buffer)) != -1) {
-            fout.write(buffer, 0, bytesRead);
-            // test print
-            System.out.println("in loop");
+        StringBuilder sb = new StringBuilder();
+    
+        while ((bytesRead = bin.read(buffer)) > 0) {
+            String chunk = new String(buffer, 0, bytesRead);
+            sb.append(chunk);
+    
+            int endOfFileIndex = sb.indexOf("END_OF_FILE");
+            if (endOfFileIndex != -1) {
+                fout.write(sb.substring(0, endOfFileIndex).getBytes());
+                break;
+            } else {
+                fout.write(buffer, 0, bytesRead);
+            }
         }
         
         fout.close();
         System.out.println("File " + fileName + " received.");
     }
-
     // Method to send a file to the server
    
 private static void sendFile(String fileName, Socket socket) throws IOException {
