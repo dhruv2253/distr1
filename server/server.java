@@ -13,13 +13,10 @@ public class server {
             ServerSocket serverSocket = new ServerSocket(port);
             System.out.println("Server started. Listening on port " + port);
 
-            // multithreading
             while (true) {
-                // accept client
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("New client connected: " + clientSocket.getInetAddress());
 
-                // create new thread
                 ClientHandler thread = new ClientHandler(clientSocket);
                 thread.start();
             }
@@ -36,7 +33,7 @@ class ClientHandler extends Thread {
 
     public ClientHandler(Socket socket) {
         this.clientSocket = socket;
-        this.currentDir = new File(System.getProperty("user.dir")); // Default to server's root dir
+        this.currentDir = new File(System.getProperty("user.dir"));
     }
 
     @Override
@@ -57,9 +54,15 @@ class ClientHandler extends Thread {
                     String fileName = command.substring(4);
                     sendFile(fileName, out);
                     out.println();
+                    out.println();
+                    out.println();
+                    out.flush();
+
                 } else if (command.startsWith("put ")) {
                     String fileName = command.substring(4);
                     receiveFile(fileName, in);
+                    out.println();
+                    out.println();
                     out.println();
                 } else if (command.startsWith("delete ")) {
                     String fileName = command.substring(7);
@@ -88,7 +91,7 @@ class ClientHandler extends Thread {
     }
 
     private void sendFile(String fileName, PrintWriter out) throws IOException {
-        File file = new File(currentDir, fileName); // Use the client's current directory
+        File file = new File(currentDir, fileName); 
         if (file.exists() && !file.isDirectory()) {
             BufferedInputStream fin = new BufferedInputStream(new FileInputStream(file));
             byte[] buffer = new byte[4096];
@@ -109,12 +112,17 @@ class ClientHandler extends Thread {
     }
 
     private void receiveFile(String fileName, BufferedReader in) throws IOException {
-        FileOutputStream fout = new FileOutputStream(new File(currentDir, fileName));
         char[] buffer = new char[4096];
         StringBuilder fileContent = new StringBuilder();
-        int charsRead;
+        int charsRead = in.read(buffer);
+        String chunk = new String(buffer, 0, charsRead);
+        if (chunk.startsWith("File not found:")) {
+            System.out.println("File not found on the client.");
+            return;
+        }
+        FileOutputStream fout = new FileOutputStream(new File(currentDir, fileName));
     
-        while ((charsRead = in.read(buffer)) != -1) {
+        while (charsRead != -1) {
             fileContent.append(buffer, 0, charsRead);
     
             int markerIndex = fileContent.indexOf("END_OF_FILE");
@@ -129,7 +137,7 @@ class ClientHandler extends Thread {
     }
 
     private void deleteFile(String fileName, PrintWriter out) {
-        File file = new File(currentDir, fileName); // Use the client's current directory
+        File file = new File(currentDir, fileName);
         if (file.delete()) {
             out.println("File deleted: " + fileName);
         } else {
@@ -138,7 +146,7 @@ class ClientHandler extends Thread {
     }
 
     private void listFiles(PrintWriter out) {
-        File[] files = currentDir.listFiles(); // List files in client's current directory
+        File[] files = currentDir.listFiles(); 
         if (files != null && files.length > 0) {
             StringBuilder fileList = new StringBuilder();
             for (File file : files) {
@@ -155,7 +163,7 @@ class ClientHandler extends Thread {
 
         File newDir;
         if (dir.equals("..")) {
-            newDir = currentDir.getParentFile(); // Go up one directory
+            newDir = currentDir.getParentFile(); 
             if (newDir != null && newDir.exists()) {
                 currentDir = newDir;
                 out.println("Changed directory to " + currentDir.getAbsolutePath());
@@ -163,7 +171,7 @@ class ClientHandler extends Thread {
                 out.println("Already at the root directory.");
             }
         } else {
-            newDir = new File(currentDir, dir); // Resolve relative path
+            newDir = new File(currentDir, dir); 
             if (newDir.exists() && newDir.isDirectory()) {
                 currentDir = newDir;
                 out.println("Changed directory to " + currentDir.getAbsolutePath());

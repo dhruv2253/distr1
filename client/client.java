@@ -28,9 +28,9 @@ public class client {
                 System.out.print("myftp> ");
                 String command = userIn.readLine();
 
+
                 out.println(command);
 
-                // Handle file commands (get, put)
                 if (command.startsWith("get ")) {
                     String fileName = command.substring(4);
                     receiveFile(fileName, socket);
@@ -58,13 +58,20 @@ public class client {
 
     private static void receiveFile(String fileName, Socket socket) throws IOException {
         BufferedInputStream bin = new BufferedInputStream(socket.getInputStream());
-        FileOutputStream fout = new FileOutputStream("received_" + fileName);
         byte[] buffer = new byte[4096];
-        int bytesRead;
+        int bytesRead = bin.read(buffer);
         StringBuilder sb = new StringBuilder();
+
+        String chunk = new String(buffer, 0, bytesRead);
+        if (chunk.contains("File not found")) {
+            System.out.println("File not found on the server.");
+            return;
+        }
+        FileOutputStream fout = new FileOutputStream(fileName);
+
     
-        while ((bytesRead = bin.read(buffer)) > 0) {
-            String chunk = new String(buffer, 0, bytesRead);
+        while (bytesRead  > 0) {
+            chunk = new String(buffer, 0, bytesRead);
             sb.append(chunk);
     
             int endOfFileIndex = sb.indexOf("END_OF_FILE");
@@ -74,12 +81,12 @@ public class client {
             } else {
                 fout.write(buffer, 0, bytesRead);
             }
+            bytesRead = bin.read(buffer);
         }
 
         fout.close();
         System.out.println("File " + fileName + " received.");
     }
-    // Method to send a file to the server
 
     private static void sendFile(String fileName, Socket socket) throws IOException {
         File file = new File(fileName);
@@ -88,20 +95,18 @@ public class client {
             return;
         }
 
-        // Create a file input stream to read the file
         FileInputStream fin = new FileInputStream(file);
-        BufferedOutputStream bout = new BufferedOutputStream(socket.getOutputStream()); // Get output stream to send the
-                                                                                        // file
+        BufferedOutputStream bout = new BufferedOutputStream(socket.getOutputStream());
+                                                                                       
         byte[] buffer = new byte[4096];
         int bytesRead;
 
-        // Send the file content to the server in chunks
         while ((bytesRead = fin.read(buffer)) != -1) {
             bout.write(buffer, 0, bytesRead);
         }
     bout.write("END_OF_FILE".getBytes());  
 
-        bout.flush(); // Ensure the data is sent
+        bout.flush();
         fin.close();
         System.out.println("File " + fileName + " sent.");
     }
