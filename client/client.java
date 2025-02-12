@@ -28,7 +28,6 @@ public class client {
                 System.out.print("myftp> ");
                 String command = userIn.readLine();
 
-
                 out.println(command);
 
                 if (command.startsWith("get ")) {
@@ -69,11 +68,10 @@ public class client {
         }
         FileOutputStream fout = new FileOutputStream(fileName);
 
-    
-        while (bytesRead  > 0) {
+        while (bytesRead > 0) {
             chunk = new String(buffer, 0, bytesRead);
             sb.append(chunk);
-    
+
             int endOfFileIndex = sb.indexOf("END_OF_FILE");
             if (endOfFileIndex != -1) {
                 fout.write(sb.substring(0, endOfFileIndex).getBytes());
@@ -83,7 +81,7 @@ public class client {
             }
             bytesRead = bin.read(buffer);
         }
-
+        fout.flush();
         fout.close();
         System.out.println("File " + fileName + " received.");
     }
@@ -97,14 +95,14 @@ public class client {
 
         FileInputStream fin = new FileInputStream(file);
         BufferedOutputStream bout = new BufferedOutputStream(socket.getOutputStream());
-                                                                                       
+
         byte[] buffer = new byte[4096];
         int bytesRead;
 
         while ((bytesRead = fin.read(buffer)) != -1) {
             bout.write(buffer, 0, bytesRead);
         }
-    bout.write("END_OF_FILE".getBytes());  
+        bout.write("END_OF_FILE".getBytes());
 
         bout.flush();
         fin.close();
