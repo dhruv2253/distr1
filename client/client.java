@@ -1,112 +1,103 @@
-import java.net.*;
 import java.io.*;
+import java.net.*;
 
 public class client {
+    private static String server;
+    private static int port;
+    private static int terminatePort;
+
     public static void main(String[] args) {
-        if (args.length != 2) {
+        if (args.length != 3) {
+            System.out.println("Usage: java FTPClient <server> <port> <terminatePort>");
             System.exit(1);
         }
-        String server = args[0];
-        int port = Integer.parseInt(args[1]);
 
-        try {
-            Socket socket = new Socket(server, port);
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            BufferedReader userIn = new BufferedReader(new InputStreamReader(System.in));
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-            System.out.println("Connected to a server");
+        server = args[0];
+        port = Integer.parseInt(args[1]);
+        terminatePort = Integer.parseInt(args[2]);
 
+        try (Socket socket = new Socket(server, port);
+                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                BufferedReader userIn = new BufferedReader(new InputStreamReader(System.in));
+                PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
+
+            System.out.println("Connected to the server");
             String response;
-            while ((response = in.readLine()) != null) {
-                System.out.println(response);
 
-                if (response.equals("Terminating")) {
-                    socket.close();
-                    break;
-                }
-
-                System.out.print("myftp> ");
+            while (true) {
+                System.out.print("mytftp> ");
                 String command = userIn.readLine();
+                if (command == null)
+                    break;
+
+                boolean background = command.endsWith("&");
+                if (background)
+                    command = command.substring(0, command.length() - 1).trim();
 
                 out.println(command);
+                response = in.readLine();
+                System.out.println(response);
 
                 if (command.startsWith("get ")) {
                     String fileName = command.substring(4);
-                    receiveFile(fileName, socket);
+                    Runnable task = () -> receiveFile(fileName);
+                    new Thread(task).start();
                 } else if (command.startsWith("put ")) {
                     String fileName = command.substring(4);
-                    sendFile(fileName, socket);
+                    Runnable task = () -> sendFile(fileName);
+                    new Thread(task).start();
                 } else if (command.equals("quit")) {
                     break;
-                } else if (command.startsWith("cd ")) {
-                    String directory = command.substring(3);
-                    response = in.readLine();
-                    System.out.println(response);
-                } else if (command.startsWith("mkdir ")) {
-                    String dirName = command.substring(6);
-                    System.out.println("Attempting to create directory: " + dirName);
-                    response = in.readLine(); // Read the server response
-                    System.out.println("Server response: " + response);
+                } else if (command.startsWith("terminate ")) {
+                    int commandId = Integer.parseInt(command.split(" ")[1]);
+                    terminateCommand(commandId);
                 }
             }
-
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private static void receiveFile(String fileName, Socket socket) throws IOException {
-        BufferedInputStream bin = new BufferedInputStream(socket.getInputStream());
-        byte[] buffer = new byte[4096];
-        int bytesRead = bin.read(buffer);
-        StringBuilder sb = new StringBuilder();
+    private static void receiveFile(String fileName) {
+        try (Socket fileSocket = new Socket(server, port);
+                InputStream in = fileSocket.getInputStream();
+                FileOutputStream fout = new FileOutputStream(fileName)) {
 
-        String chunk = new String(buffer, 0, bytesRead);
-        if (chunk.contains("File not found")) {
-            System.out.println("File not found on the server.");
-            return;
-        }
-        FileOutputStream fout = new FileOutputStream(fileName);
-
-        while (bytesRead > 0) {
-            chunk = new String(buffer, 0, bytesRead);
-            sb.append(chunk);
-
-            int endOfFileIndex = sb.indexOf("END_OF_FILE");
-            if (endOfFileIndex != -1) {
-                fout.write(sb.substring(0, endOfFileIndex).getBytes());
-                break;
-            } else {
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = in.read(buffer)) != -1) {
                 fout.write(buffer, 0, bytesRead);
             }
-            bytesRead = bin.read(buffer);
+            System.out.println("File " + fileName + " received.");
+        } catch (IOException e) {
+            System.out.println("Error receiving file: " + e.getMessage());
         }
-        fout.flush();
-        fout.close();
-        System.out.println("File " + fileName + " received.");
     }
 
-    private static void sendFile(String fileName, Socket socket) throws IOException {
-        File file = new File(fileName);
-        if (!file.exists()) {
-            System.out.println("File not found: " + fileName);
-            return;
+    private static void sendFile(String fileName) {
+        try (Socket fileSocket = new Socket(server, port);
+                FileInputStream fin = new FileInputStream(fileName);
+                OutputStream out = fileSocket.getOutputStream()) {
+
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = fin.read(buffer)) != -1) {
+                out.write(buffer, 0, bytesRead);
+            }
+            System.out.println("File " + fileName + " sent.");
+        } catch (IOException e) {
+            System.out.println("Error sending file: " + e.getMessage());
         }
-
-        FileInputStream fin = new FileInputStream(file);
-        BufferedOutputStream bout = new BufferedOutputStream(socket.getOutputStream());
-
-        byte[] buffer = new byte[4096];
-        int bytesRead;
-
-        while ((bytesRead = fin.read(buffer)) != -1) {
-            bout.write(buffer, 0, bytesRead);
-        }
-        bout.write("END_OF_FILE".getBytes());
-
-        bout.flush();
-        fin.close();
-        System.out.println("File " + fileName + " sent.");
     }
 
+    private static void terminateCommand(int commandId) {
+        try (Socket terminateSocket = new Socket(server, terminatePort);
+                PrintWriter out = new PrintWriter(terminateSocket.getOutputStream(), true)) {
+
+            out.println("terminate " + commandId);
+            System.out.println("Terminate request sent for command " + commandId);
+        } catch (IOException e) {
+            System.out.println("Error sending terminate command: " + e.getMessage());
+        }
+    }
 }

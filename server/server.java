@@ -1,200 +1,226 @@
 import java.io.*;
 import java.net.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class server {
+    private static final ConcurrentHashMap<Integer, Boolean> commandStatus = new ConcurrentHashMap<>();
+    private static final AtomicInteger commandCounter = new AtomicInteger(0);
+    private static final Object fileLock = new Object(); // Lock for synchronizing file operations
+
     public static void main(String[] args) {
-        if (args.length != 1) {
+        if (args.length != 2) {
+            System.out.println("Usage: java server <nport> <tport>");
             System.exit(1);
         }
 
-        int port = Integer.parseInt(args[0]);
+        int nport = Integer.parseInt(args[0]);
+        int tport = Integer.parseInt(args[1]);
 
         try {
-            ServerSocket serverSocket = new ServerSocket(port);
-            System.out.println("Server started. Listening on port " + port);
+            ServerSocket normalServerSocket = new ServerSocket(nport);
+            ServerSocket terminateServerSocket = new ServerSocket(tport);
 
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                System.out.println("New client connected: " + clientSocket.getInetAddress());
+            System.out.println("Server started. Listening on normal port " + nport + " and terminate port " + tport);
 
-                ClientHandler thread = new ClientHandler(clientSocket);
-                thread.start();
-            }
+            // Thread to handle client connections
+            new Thread(() -> {
+                while (true) {
+                    try {
+                        Socket clientSocket = normalServerSocket.accept();
+                        System.out.println("New client connected: " + clientSocket.getInetAddress());
+                        new ClientHandler(clientSocket).start();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }).start();
+
+            // Thread to handle termination commands
+            new Thread(() -> {
+                while (true) {
+                    try {
+                        Socket terminateSocket = terminateServerSocket.accept();
+                        BufferedReader in = new BufferedReader(new InputStreamReader(terminateSocket.getInputStream()));
+                        String command = in.readLine();
+
+                        if (command.startsWith("terminate ")) {
+                            int commandId = Integer.parseInt(command.substring(10));
+                            commandStatus.put(commandId, true);
+                            System.out.println("Termination request received for command ID: " + commandId);
+                        }
+
+                        terminateSocket.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }).start();
+
         } catch (IOException e) {
-            System.err.println("Could not start server on port " + port);
+            System.err.println("Could not start server.");
             e.printStackTrace();
         }
     }
-}
 
-class ClientHandler extends Thread {
-    private Socket clientSocket;
-    private File currentDir;
+    static class ClientHandler extends Thread {
+        private Socket clientSocket;
+        private File currentDir;
 
-    public ClientHandler(Socket socket) {
-        this.clientSocket = socket;
-        this.currentDir = new File(System.getProperty("user.dir"));
-    }
+        public ClientHandler(Socket socket) {
+            this.clientSocket = socket;
+            this.currentDir = new File(System.getProperty("user.dir"));
+        }
 
-    @Override
-    public void run() {
-        try {
-            BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-            out.println("Welcome to MyFTP Server!");
+        @Override
+        public void run() {
+            try {
+                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+                out.println("Welcome to MyFTP Server!");
 
-            String command;
-            while ((command = in.readLine()) != null) {
-                System.out.println("Received from " + clientSocket.getInetAddress() + ": " + command);
-                if (command.equalsIgnoreCase("quit")) {
-                    out.println("Terminating");
-                    break;
+                String command;
+                while ((command = in.readLine()) != null) {
+                    System.out.println("Received: " + command);
+                    if (command.equalsIgnoreCase("quit")) {
+                        out.println("Terminating");
+                        break;
+                    }
+                    if (command.startsWith("get ")) {
+                        int commandId = commandCounter.incrementAndGet();
+                        commandStatus.put(commandId, false);
+                        out.println("Command ID: " + commandId);
+                        sendFile(command.substring(4), out, commandId);
+                    } else if (command.startsWith("put ")) {
+                        int commandId = commandCounter.incrementAndGet();
+                        commandStatus.put(commandId, false);
+                        out.println("Command ID: " + commandId);
+                        receiveFile(command.substring(4), in, commandId);
+                    } else if (command.startsWith("delete ")) {
+                        deleteFile(command.substring(7), out);
+                    } else if (command.equals("ls")) {
+                        listFiles(out);
+                    } else if (command.startsWith("cd ")) {
+                        changeDirectory(command.substring(3), out);
+                    } else if (command.startsWith("mkdir ")) {
+                        makeDirectory(command.substring(6), out);
+                    } else if (command.equals("pwd")) {
+                        printWorkingDirectory(out);
+                    } else {
+                        out.println("Invalid command.");
+                    }
                 }
-                if (command.startsWith("get ")) {
-                    String fileName = command.substring(4);
-                    sendFile(fileName, out);
-                    out.println();
-                    out.println();
-                    out.println();
-                    out.flush();
 
-                } else if (command.startsWith("put ")) {
-                    String fileName = command.substring(4);
-                    receiveFile(fileName, in);
-                    out.println();
-                    out.println();
-                    out.println();
-                } else if (command.startsWith("delete ")) {
-                    String fileName = command.substring(7);
-                    deleteFile(fileName, out);
-                } else if (command.equals("ls")) {
-                    listFiles(out);
-                } else if (command.startsWith("cd ")) {
-                    String dir = command.substring(3);
-                    changeDirectory(dir, out);
-                } else if (command.startsWith("mkdir ")) {
-                    String dir = command.substring(6);
-                    makeDirectory(dir, out);
-                } else if (command.equals("pwd")) {
-                    printWorkingDirectory(out);
+                clientSocket.close();
+
+            } catch (IOException e) {
+                System.err.println("Client error: " + e.getMessage());
+            }
+        }
+
+        private void sendFile(String fileName, PrintWriter out, int commandId) throws IOException {
+            File file = new File(currentDir, fileName);
+            if (file.exists() && !file.isDirectory()) {
+                BufferedInputStream fin = new BufferedInputStream(new FileInputStream(file));
+                byte[] buffer = new byte[1000];
+                int bytesRead;
+
+                while ((bytesRead = fin.read(buffer)) != -1) {
+                    if (commandStatus.get(commandId)) {
+                        System.out.println("Terminating command ID: " + commandId);
+                        fin.close();
+                        return;
+                    }
+                    out.write(new String(buffer, 0, bytesRead));
+                }
+
+                out.flush();
+                out.write("END_OF_FILE");
+                out.println();
+                out.flush();
+                fin.close();
+                System.out.println("File sent: " + fileName);
+            } else {
+                out.println("File not found: " + fileName);
+            }
+        }
+
+        private void receiveFile(String fileName, BufferedReader in, int commandId) throws IOException {
+            synchronized (fileLock) {
+                File file = new File(currentDir, fileName);
+                FileOutputStream fout = new FileOutputStream(file);
+                char[] buffer = new char[1000];
+                int bytesRead;
+
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    if (commandStatus.get(commandId)) {
+                        System.out.println("Terminating command ID: " + commandId);
+                        fout.close();
+                        file.delete();
+                        return;
+                    }
+                    fout.write(new String(buffer, 0, bytesRead).getBytes());
+                }
+                fout.flush();
+                fout.close();
+                System.out.println("File received: " + fileName);
+            }
+        }
+
+        private void deleteFile(String fileName, PrintWriter out) {
+            File file = new File(currentDir, fileName);
+            if (file.delete()) {
+                out.println("File deleted: " + fileName);
+            } else {
+                out.println("File not found: " + fileName);
+            }
+        }
+
+        private void listFiles(PrintWriter out) {
+            File[] files = currentDir.listFiles();
+            if (files != null && files.length > 0) {
+                StringBuilder fileList = new StringBuilder();
+                for (File file : files) {
+                    fileList.append(file.getName()).append(" ");
+                }
+                out.println(fileList.toString().trim());
+            } else {
+                out.println("No files found.");
+            }
+        }
+
+        private void changeDirectory(String dir, PrintWriter out) {
+            File newDir;
+            if (dir.equals("..")) {
+                newDir = currentDir.getParentFile();
+                if (newDir != null && newDir.exists()) {
+                    currentDir = newDir;
+                    out.println("Changed directory to " + currentDir.getAbsolutePath());
                 } else {
-                    out.println("Invalid command.");
+                    out.println("Already at the root directory.");
+                }
+            } else {
+                newDir = new File(currentDir, dir);
+                if (newDir.exists() && newDir.isDirectory()) {
+                    currentDir = newDir;
+                    out.println("Changed directory to " + currentDir.getAbsolutePath());
+                } else {
+                    out.println("Directory not found: " + dir);
                 }
             }
-
-            System.out.println("Client disconnected: " + clientSocket.getInetAddress());
-            clientSocket.close();
-
-        } catch (IOException e) {
-            System.err.println("Client error: " + e.getMessage());
-        }
-    }
-
-    private void sendFile(String fileName, PrintWriter out) throws IOException {
-        File file = new File(currentDir, fileName); 
-        if (file.exists() && !file.isDirectory()) {
-            BufferedInputStream fin = new BufferedInputStream(new FileInputStream(file));
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-
-            while ((bytesRead = fin.read(buffer)) != -1) {
-                out.write(new String(buffer, 0, bytesRead));
-            }
-            out.flush();
-            out.write("END_OF_FILE");
-            out.println();
-            out.flush();
-            fin.close();
-            System.out.println("File sent: " + fileName);
-        } else {
-            out.println("File not found: " + fileName);
-        }
-    }
-
-    private void receiveFile(String fileName, BufferedReader in) throws IOException {
-        char[] buffer = new char[4096];
-        StringBuilder fileContent = new StringBuilder();
-        int charsRead = in.read(buffer);
-        String chunk = new String(buffer, 0, charsRead);
-        if (chunk.startsWith("File not found:")) {
-            System.out.println("File not found on the client.");
-            return;
-        }
-        FileOutputStream fout = new FileOutputStream(new File(currentDir, fileName));
-    
-        while (charsRead != -1) {
-            fileContent.append(buffer, 0, charsRead);
-    
-            int markerIndex = fileContent.indexOf("END_OF_FILE");
-            if (markerIndex != -1) {
-                fout.write(fileContent.substring(0, markerIndex).getBytes());
-                break;
-            }
         }
 
-        fout.close();
-        System.out.println("File received: " + fileName);
-    }
-
-    private void deleteFile(String fileName, PrintWriter out) {
-        File file = new File(currentDir, fileName);
-        if (file.delete()) {
-            out.println("File deleted: " + fileName);
-        } else {
-            out.println("File not found: " + fileName);
-        }
-    }
-
-    private void listFiles(PrintWriter out) {
-        File[] files = currentDir.listFiles(); 
-        if (files != null && files.length > 0) {
-            StringBuilder fileList = new StringBuilder();
-            for (File file : files) {
-                fileList.append(file.getName()).append(" ");
-            }
-            out.println(fileList.toString().trim());
-        } else {
-            out.println("No files found.");
-        }
-    }
-
-    private void changeDirectory(String dir, PrintWriter out) {
-        System.out.println("Current directory: " + currentDir.getAbsolutePath());
-
-        File newDir;
-        if (dir.equals("..")) {
-            newDir = currentDir.getParentFile(); 
-            if (newDir != null && newDir.exists()) {
-                currentDir = newDir;
-                out.println("Changed directory to " + currentDir.getAbsolutePath());
+        private void makeDirectory(String dir, PrintWriter out) {
+            File newDir = new File(currentDir, dir);
+            if (newDir.mkdir()) {
+                out.println("Directory created: " + dir);
             } else {
-                out.println("Already at the root directory.");
-            }
-        } else {
-            newDir = new File(currentDir, dir); 
-            if (newDir.exists() && newDir.isDirectory()) {
-                currentDir = newDir;
-                out.println("Changed directory to " + currentDir.getAbsolutePath());
-            } else {
-                out.println("Directory not found: " + dir);
+                out.println("Failed to create directory: " + dir);
             }
         }
-        out.println();
 
-        System.out.println("Updated directory: " + currentDir.getAbsolutePath());
-    }
-
-    private void makeDirectory(String dir, PrintWriter out) {
-        File newDir = new File(currentDir, dir);
-        if (newDir.mkdir()) {
-            out.println("Directory created: " + dir);
-        } else {
-            out.println("Failed to create directory: " + dir);
+        private void printWorkingDirectory(PrintWriter out) {
+            out.println("Current directory: " + currentDir.getAbsolutePath());
         }
-        out.println();
-    }
-
-    private void printWorkingDirectory(PrintWriter out) {
-        out.println("Current directory: " + currentDir.getAbsolutePath());
     }
 }
