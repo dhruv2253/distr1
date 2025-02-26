@@ -23,18 +23,24 @@ public class client {
 
             System.out.println("Connected to the server");
             String response;
-
+            System.out.println(in.readLine());
             while (true) {
                 System.out.print("mytftp> ");
                 String command = userIn.readLine();
                 if (command == null)
                     break;
+                
+                if (command.startsWith("terminate ")) {
+                    int commandId = Integer.parseInt(command.split(" ")[1]);
+                    terminateCommand(commandId);
+                } else {
+                    out.println(command);
+                }
 
                 boolean background = command.endsWith("&");
                 if (background)
                     command = command.substring(0, command.length() - 1).trim();
 
-                out.println(command);
                 response = in.readLine();
                 System.out.println(response);
 
@@ -48,10 +54,7 @@ public class client {
                     new Thread(task).start();
                 } else if (command.equals("quit")) {
                     break;
-                } else if (command.startsWith("terminate ")) {
-                    int commandId = Integer.parseInt(command.split(" ")[1]);
-                    terminateCommand(commandId);
-                }
+                } 
             }
         } catch (IOException e) {
             e.printStackTrace();

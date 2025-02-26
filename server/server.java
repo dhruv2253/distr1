@@ -174,6 +174,7 @@ public class server {
             } else {
                 out.println("File not found: " + fileName);
             }
+            out.flush();
         }
 
         private void listFiles(PrintWriter out) {
@@ -187,6 +188,7 @@ public class server {
             } else {
                 out.println("No files found.");
             }
+            out.flush();
         }
 
         private void changeDirectory(String dir, PrintWriter out) {
@@ -208,6 +210,7 @@ public class server {
                     out.println("Directory not found: " + dir);
                 }
             }
+            out.flush();
         }
 
         private void makeDirectory(String dir, PrintWriter out) {
@@ -217,10 +220,12 @@ public class server {
             } else {
                 out.println("Failed to create directory: " + dir);
             }
+            out.flush();
         }
 
         private void printWorkingDirectory(PrintWriter out) {
             out.println("Current directory: " + currentDir.getAbsolutePath());
+            out.flush();
         }
     }
 }
