@@ -87,14 +87,13 @@ public class server {
                     }
                     if (command.startsWith("get ")) {
                         int commandId = commandCounter.incrementAndGet();
-                        commandStatus.put(commandId, false);
                         out.println("Command ID: " + commandId);
                         sendFile(command.substring(4), out, commandId);
                     } else if (command.startsWith("put ")) {
                         int commandId = commandCounter.incrementAndGet();
-                        commandStatus.put(commandId, false);
                         out.println("Command ID: " + commandId);
-                        receiveFile(command.substring(4), new BufferedReader(new InputStreamReader(clientSocket.getInputStream())), commandId);
+                        receiveFile(command.substring(4),
+                                new BufferedReader(new InputStreamReader(clientSocket.getInputStream())), commandId);
 
                     } else if (command.startsWith("delete ")) {
                         deleteFile(command.substring(7), out);
@@ -120,13 +119,8 @@ public class server {
 
         private void sendFile(String fileName, PrintWriter out, int commandId) throws IOException {
             File file = new File(currentDir, fileName);
-            if (!file.exists()) {
-                out.println("File not found: " + fileName);
-                return;
-            }
-
-            try (BufferedInputStream fin = new BufferedInputStream(new FileInputStream(file));
-                    OutputStream socketOut = clientSocket.getOutputStream()) {
+            if (file.exists() && !file.isDirectory()) {
+                BufferedInputStream fin = new BufferedInputStream(new FileInputStream(file));
                 byte[] buffer = new byte[1024];
                 int bytesRead;
 
@@ -135,44 +129,50 @@ public class server {
                         System.out.println("Terminating command ID: " + commandId);
                         return;
                     }
-                    socketOut.write(buffer, 0, bytesRead);
+                    out.write(new String(buffer, 0, bytesRead));
                 }
-
-                socketOut.flush();
+                out.flush();
+                out.write("END_OF_FILE");
+                out.println();
+                out.flush();
+                fin.close();
+                System.out.println("File sent: " + fileName);
+            } else {
+                out.println("File not found: " + fileName);
             }
         }
 
         private void receiveFile(String fileName, BufferedReader in, int commandId) throws IOException {
             char[] buffer = new char[1024];
             StringBuilder fileContent = new StringBuilder();
-            int charsRead = in.read(buffer);
-            String chunk = new String(buffer, 0, charsRead);
-            if (chunk.startsWith("File not found:")) {
-                System.out.println("File not found on the client.");
-                return;
-            }
-            FileOutputStream fout = new FileOutputStream(new File(currentDir, fileName));
-            
-            while (charsRead != -1) {
+            int charsRead;
+            File file = new File(currentDir, fileName);
+            FileOutputStream fout = new FileOutputStream(file);
+
+            while ((charsRead = in.read(buffer)) != -1) {
                 fileContent.append(buffer, 0, charsRead);
+                System.out.println(commandStatus.getOrDefault(commandId, false));
                 if (commandStatus.getOrDefault(commandId, false)) {
                     System.out.println("Terminating command ID: " + commandId);
                     fout.close();
-                    new File(currentDir, fileName).delete();
+                    file.delete();
+                    System.out.println("file dle");
                     return;
                 }
                 int markerIndex = fileContent.indexOf("END_OF_FILE");
                 if (markerIndex != -1) {
                     fout.write(fileContent.substring(0, markerIndex).getBytes());
                     break;
+                } else {
+                    fout.write(fileContent.toString().getBytes());
+                    fileContent.setLength(0);
                 }
             }
-    
+
             fout.close();
             System.out.println("File received: " + fileName);
         }
-    
-    
+
         private void deleteFile(String fileName, PrintWriter out) {
             File file = new File(currentDir, fileName);
             if (file.delete()) {

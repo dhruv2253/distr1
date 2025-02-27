@@ -81,15 +81,33 @@ public class client {
     }
 
     private static void receiveFile(String fileName, Socket socket) throws IOException {
-        try (BufferedOutputStream fout = new BufferedOutputStream(new FileOutputStream(fileName));
-                InputStream in = socket.getInputStream()) {
-            byte[] buffer = new byte[1024];
-            int bytesRead;
+        BufferedInputStream bin = new BufferedInputStream(socket.getInputStream());
+        byte[] buffer = new byte[1024];
+        int bytesRead = bin.read(buffer);
+        StringBuilder sb = new StringBuilder();
 
-            while ((bytesRead = in.read(buffer)) != -1) {
+        String chunk = new String(buffer, 0, bytesRead);
+        if (chunk.contains("File not found")) {
+            System.out.println("File not found on the server.");
+            return;
+        }
+        FileOutputStream fout = new FileOutputStream(fileName);
+
+        while (bytesRead > 0) {
+            chunk = new String(buffer, 0, bytesRead);
+            sb.append(chunk);
+
+            int endOfFileIndex = sb.indexOf("END_OF_FILE");
+            if (endOfFileIndex != -1) {
+                fout.write(sb.substring(0, endOfFileIndex).getBytes());
+                break;
+            } else {
                 fout.write(buffer, 0, bytesRead);
             }
+            bytesRead = bin.read(buffer);
         }
+        fout.flush();
+        fout.close();
     }
 
     private static void sendFile(String fileName, Socket socket) throws IOException {
@@ -102,7 +120,7 @@ public class client {
         FileInputStream fin = new FileInputStream(file);
         BufferedOutputStream bout = new BufferedOutputStream(socket.getOutputStream());
 
-        byte[] buffer = new byte[4096];
+        byte[] buffer = new byte[1024];
         int bytesRead;
 
         while ((bytesRead = fin.read(buffer)) != -1) {
@@ -113,7 +131,6 @@ public class client {
         bout.flush();
         fin.close();
     }
-
 
     private static void terminateCommand(int commandId) {
         try (Socket terminateSocket = new Socket(server, terminatePort);
