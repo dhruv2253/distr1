@@ -125,7 +125,6 @@ public class server {
                 return;
             }
 
-            out.println("Sending file: " + fileName);
             try (BufferedInputStream fin = new BufferedInputStream(new FileInputStream(file));
                     OutputStream socketOut = clientSocket.getOutputStream()) {
                 byte[] buffer = new byte[1024];
