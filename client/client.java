@@ -91,12 +91,17 @@ public class client {
             System.out.println("File not found on the server.");
             return;
         }
-        FileOutputStream fout = new FileOutputStream(fileName);
-
+        File file = new File(fileName);
+        FileOutputStream fout = new FileOutputStream(file);
+        boolean signal = false;
         while (bytesRead > 0) {
             chunk = new String(buffer, 0, bytesRead);
             sb.append(chunk);
-
+            if (chunk.contains("termination_signal") || signal) {
+                file.delete();
+                signal = true;
+                continue;
+            }
             int endOfFileIndex = sb.indexOf("END_OF_FILE");
             if (endOfFileIndex != -1) {
                 fout.write(sb.substring(0, endOfFileIndex).getBytes());

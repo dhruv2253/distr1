@@ -123,11 +123,16 @@ public class server {
                 BufferedInputStream fin = new BufferedInputStream(new FileInputStream(file));
                 byte[] buffer = new byte[1024];
                 int bytesRead;
-
+                boolean signal = false;
                 while ((bytesRead = fin.read(buffer)) != -1) {
                     if (commandStatus.getOrDefault(commandId, false)) {
                         System.out.println("Terminating command ID: " + commandId);
-                        return;
+                        if (!signal) {
+                            signal = true;
+                            out.println("termination_signal");
+                            System.out.println("termination_signal");
+                        }
+                        continue;
                     }
                     out.write(new String(buffer, 0, bytesRead));
                 }
@@ -150,15 +155,14 @@ public class server {
             FileOutputStream fout = new FileOutputStream(file);
 
             while ((charsRead = in.read(buffer)) != -1) {
-                fileContent.append(buffer, 0, charsRead);
-                System.out.println(commandStatus.getOrDefault(commandId, false));
                 if (commandStatus.getOrDefault(commandId, false)) {
                     System.out.println("Terminating command ID: " + commandId);
                     fout.close();
                     file.delete();
                     System.out.println("file dle");
-                    return;
+                    continue;
                 }
+                fileContent.append(buffer, 0, charsRead);
                 int markerIndex = fileContent.indexOf("END_OF_FILE");
                 if (markerIndex != -1) {
                     fout.write(fileContent.substring(0, markerIndex).getBytes());
