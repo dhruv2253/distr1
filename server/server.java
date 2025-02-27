@@ -3,15 +3,17 @@ import java.net.*;
 
 public class server {
     public static void main(String[] args) {
-        if (args.length != 1) {
+        if (args.length != 2) {
             System.exit(1);
         }
 
         int port = Integer.parseInt(args[0]);
+        int tport = Integer.parseInt(args[1]);
 
         try {
             ServerSocket serverSocket = new ServerSocket(port);
-            System.out.println("Server started. Listening on port " + port);
+            ServerSocket terminateSocket = new ServerSocket(tport);
+            System.out.println("Server started. Listening on port " + port + " and terminate port " + tport);
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();

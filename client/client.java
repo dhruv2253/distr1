@@ -3,14 +3,16 @@ import java.io.*;
 
 public class client {
     public static void main(String[] args) {
-        if (args.length != 2) {
+        if (args.length != 3) {
             System.exit(1);
         }
         String server = args[0];
         int port = Integer.parseInt(args[1]);
+        int tport = Integer.parseInt(args[2]);
 
         try {
             Socket socket = new Socket(server, port);
+            Socket terminateSocket = new Socket(server, tport);
             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             BufferedReader userIn = new BufferedReader(new InputStreamReader(System.in));
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
