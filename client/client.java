@@ -28,7 +28,7 @@ public class client {
                 String command = userIn.readLine();
                 if (command == null)
                     break;
-                
+
                 if (command.startsWith("terminate ")) {
                     int commandId = Integer.parseInt(command.split(" ")[1]);
                     terminateCommand(commandId);
@@ -45,50 +45,54 @@ public class client {
 
                 if (command.startsWith("get ")) {
                     String fileName = command.substring(4);
-                    Runnable task = () -> receiveFile(fileName);
+                    Runnable task = () -> {
+                        try {
+                            receiveFile(fileName, socket); // Pass the socket here
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    };
                     new Thread(task).start();
                 } else if (command.startsWith("put ")) {
                     String fileName = command.substring(4);
-                    Runnable task = () -> sendFile(fileName);
+                    Runnable task = () -> {
+                        try {
+                            sendFile(fileName, socket); // Pass the socket here
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    };
                     new Thread(task).start();
                 } else if (command.equals("quit")) {
                     break;
-                } 
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private static void receiveFile(String fileName) {
-        try (Socket fileSocket = new Socket(server, port);
-                InputStream in = fileSocket.getInputStream();
-                FileOutputStream fout = new FileOutputStream(fileName)) {
-
-            byte[] buffer = new byte[4096];
+    private static void receiveFile(String fileName, Socket socket) throws IOException {
+        try (BufferedOutputStream fout = new BufferedOutputStream(new FileOutputStream(fileName));
+                InputStream in = socket.getInputStream()) {
+            byte[] buffer = new byte[1024];
             int bytesRead;
+
             while ((bytesRead = in.read(buffer)) != -1) {
                 fout.write(buffer, 0, bytesRead);
             }
-            System.out.println("File " + fileName + " received.");
-        } catch (IOException e) {
-            System.out.println("Error receiving file: " + e.getMessage());
         }
     }
 
-    private static void sendFile(String fileName) {
-        try (Socket fileSocket = new Socket(server, port);
-                FileInputStream fin = new FileInputStream(fileName);
-                OutputStream out = fileSocket.getOutputStream()) {
-
-            byte[] buffer = new byte[4096];
+    private static void sendFile(String fileName, Socket socket) throws IOException {
+        try (BufferedInputStream fin = new BufferedInputStream(new FileInputStream(fileName));
+                OutputStream out = socket.getOutputStream()) {
+            byte[] buffer = new byte[1024];
             int bytesRead;
+
             while ((bytesRead = fin.read(buffer)) != -1) {
                 out.write(buffer, 0, bytesRead);
             }
-            System.out.println("File " + fileName + " sent.");
-        } catch (IOException e) {
-            System.out.println("Error sending file: " + e.getMessage());
         }
     }
 
