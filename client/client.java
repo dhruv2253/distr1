@@ -29,40 +29,48 @@ public class client {
                 if (command == null)
                     break;
 
-                if (command.startsWith("terminate ")) {
-                    int commandId = Integer.parseInt(command.split(" ")[1]);
-                    terminateCommand(commandId);
-                } else {
-                    out.println(command);
-                }
-
                 boolean background = command.endsWith("&");
                 if (background)
                     command = command.substring(0, command.length() - 1).trim();
+                if (command.startsWith("terminate ")) {
+                    int commandId = Integer.parseInt(command.split(" ")[1]);
+                    terminateCommand(commandId);
+                    continue;
+                } else {
+                    out.println(command);
+                }
 
                 response = in.readLine();
                 System.out.println(response);
 
                 if (command.startsWith("get ")) {
                     String fileName = command.substring(4);
-                    Runnable task = () -> {
-                        try {
-                            receiveFile(fileName, socket); // Pass the socket here
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    };
-                    new Thread(task).start();
+                    if (background) {
+                        Runnable task = () -> {
+                            try {
+                                receiveFile(fileName, socket); // Pass the socket here
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        };
+                        new Thread(task).start();
+                    } else {
+                        receiveFile(fileName, socket);
+                    }
                 } else if (command.startsWith("put ")) {
                     String fileName = command.substring(4);
-                    Runnable task = () -> {
-                        try {
-                            sendFile(fileName, socket); // Pass the socket here
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    };
-                    new Thread(task).start();
+                    if (background) {
+                        Runnable task = () -> {
+                            try {
+                                sendFile(fileName, socket); // Pass the socket here
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        };
+                        new Thread(task).start();
+                    } else {
+                        sendFile(fileName, socket);
+                    }
                 } else if (command.equals("quit")) {
                     break;
                 }
