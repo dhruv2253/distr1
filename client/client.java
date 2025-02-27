@@ -23,7 +23,6 @@ public class client {
 
             System.out.println("Connected to the server");
             String response;
-            System.out.println(in.readLine());
             while (true) {
                 System.out.print("mytftp> ");
                 String command = userIn.readLine();

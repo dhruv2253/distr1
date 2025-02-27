@@ -77,7 +77,6 @@ public class server {
             try {
                 BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
                 PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-                out.println("Welcome to MyFTP Server!");
 
                 String command;
                 while ((command = in.readLine()) != null) {
