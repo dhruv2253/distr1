@@ -85,16 +85,27 @@ public class client {
     }
 
     private static void sendFile(String fileName, Socket socket) throws IOException {
-        try (BufferedInputStream fin = new BufferedInputStream(new FileInputStream(fileName));
-                OutputStream out = socket.getOutputStream()) {
-            byte[] buffer = new byte[1024];
-            int bytesRead;
-
-            while ((bytesRead = fin.read(buffer)) != -1) {
-                out.write(buffer, 0, bytesRead);
-            }
+        File file = new File(fileName);
+        if (!file.exists()) {
+            System.out.println("File not found: " + fileName);
+            return;
         }
+
+        FileInputStream fin = new FileInputStream(file);
+        BufferedOutputStream bout = new BufferedOutputStream(socket.getOutputStream());
+
+        byte[] buffer = new byte[4096];
+        int bytesRead;
+
+        while ((bytesRead = fin.read(buffer)) != -1) {
+            bout.write(buffer, 0, bytesRead);
+        }
+        bout.write("END_OF_FILE".getBytes());
+
+        bout.flush();
+        fin.close();
     }
+
 
     private static void terminateCommand(int commandId) {
         try (Socket terminateSocket = new Socket(server, terminatePort);

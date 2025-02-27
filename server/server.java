@@ -94,7 +94,7 @@ public class server {
                         int commandId = commandCounter.incrementAndGet();
                         commandStatus.put(commandId, false);
                         out.println("Command ID: " + commandId);
-                        receiveFile(command.substring(4), clientSocket, commandId);
+                        receiveFile(command.substring(4), new BufferedReader(new InputStreamReader(clientSocket.getInputStream())), commandId);
 
                     } else if (command.startsWith("delete ")) {
                         deleteFile(command.substring(7), out);
@@ -142,27 +142,37 @@ public class server {
             }
         }
 
-        private void receiveFile(String fileName, Socket clientSocket, int commandId) throws IOException {
-            File file = new File(currentDir, fileName);
-
-            try (BufferedOutputStream fout = new BufferedOutputStream(new FileOutputStream(file));
-                    InputStream socketIn = clientSocket.getInputStream()) {
-                byte[] buffer = new byte[1024];
-                int bytesRead;
-
-                while ((bytesRead = socketIn.read(buffer)) != -1) {
-                    if (commandStatus.getOrDefault(commandId, false)) {
-                        System.out.println("Terminating command ID: " + commandId);
-                        file.delete();
-                        return;
-                    }
-                    fout.write(buffer, 0, bytesRead);
-                }
-
-                fout.flush();
+        private void receiveFile(String fileName, BufferedReader in, int commandId) throws IOException {
+            char[] buffer = new char[1024];
+            StringBuilder fileContent = new StringBuilder();
+            int charsRead = in.read(buffer);
+            String chunk = new String(buffer, 0, charsRead);
+            if (chunk.startsWith("File not found:")) {
+                System.out.println("File not found on the client.");
+                return;
             }
+            FileOutputStream fout = new FileOutputStream(new File(currentDir, fileName));
+            
+            while (charsRead != -1) {
+                fileContent.append(buffer, 0, charsRead);
+                if (commandStatus.getOrDefault(commandId, false)) {
+                    System.out.println("Terminating command ID: " + commandId);
+                    fout.close();
+                    new File(currentDir, fileName).delete();
+                    return;
+                }
+                int markerIndex = fileContent.indexOf("END_OF_FILE");
+                if (markerIndex != -1) {
+                    fout.write(fileContent.substring(0, markerIndex).getBytes());
+                    break;
+                }
+            }
+    
+            fout.close();
+            System.out.println("File received: " + fileName);
         }
-
+    
+    
         private void deleteFile(String fileName, PrintWriter out) {
             File file = new File(currentDir, fileName);
             if (file.delete()) {
